@@ -59,6 +59,7 @@ CORS_ALLOWED_ORIGINS = [
 # En production, vous pouvez autoriser toutes les origines temporairement
 # Attention : pas recommandé en production finale !
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
+ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
 
 # ============================
 # Application definition

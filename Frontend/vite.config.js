@@ -1,15 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  css: {
-    postcss: './postcss.config.js',
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   server: {
-    allowedHosts: [
-      "86fb0eb935a9.ngrok-free.app", // 👈 ton domaine ngrok
-    ],
+    port: 5173,
+    host: true,
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
   },
 })
