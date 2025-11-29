@@ -49,19 +49,24 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,.onrender.c
 # CORS Configuration
 # ============================
 # Pour le développement et la production
+# ============================
+# CORS Configuration
+# ============================
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "https://localhost:3000",
     "https://localhost:5173",
     "https://finalproject-frontend-three.vercel.app",
+    "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",  # Ajoutez cette ligne
 ]
 CORS_ALLOW_CREDENTIALS = True
-# En production, vous pouvez autoriser toutes les origines temporairement
-# Attention : pas recommandé en production finale !
-CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
-ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
 
+# Pour le développement, vous pouvez temporairement autoriser tout
+# ATTENTION: À désactiver en production finale !
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
+
+ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
 # ============================
 # Application definition
 # ============================

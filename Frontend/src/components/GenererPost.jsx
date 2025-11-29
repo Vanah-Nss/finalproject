@@ -324,7 +324,7 @@ export default function GenererPost() {
       if (imageFile) {
         const formData = new FormData();
         formData.append("file", imageFile);
-        const res = await fetch("http://127.0.0.1:8000/api/upload-image", {
+const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/api/upload-image`, {
           method: "POST",
           body: formData,
         });

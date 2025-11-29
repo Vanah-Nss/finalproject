@@ -300,7 +300,7 @@ export default function Historique() {
       if (editImageFile) {
         const formData = new FormData();
         formData.append("file", editImageFile);
-        const res = await fetch("http://127.0.0.1:8000/api/upload-image", { method: "POST", body: formData });
+const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/api/upload-image`, { method: "POST", body: formData });
         const data = await res.json();
         if (!data.url) throw new Error("Erreur upload image");
         finalImageUrl = data.url;
