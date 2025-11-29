@@ -1,29 +1,23 @@
-Backend/config/gemini-key.json
-Backend/.env
-Frontend/node_modules/
-Backend/node_modules/
-node_modules/
-# Dependencies
-node_modules/
-venv/
-env/
-.venv/
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
+venv/
+env/
+ENV/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/staticfiles/
+/media/
 
 # Environment variables
 .env
-.env.local
 *.env
-
-# Secrets
-*-key.json
-secrets/
-credentials/
 
 # IDE
 .vscode/
@@ -34,7 +28,3 @@ credentials/
 # OS
 .DS_Store
 Thumbs.db
-Backend/media/
-**/gemini-key.json
-**/gemini-key.json
-**/*gemini-key*
