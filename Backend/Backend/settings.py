@@ -54,8 +54,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://localhost:3000",
     "https://localhost:5173",
+    "https://finalproject-frontend-three.vercel.app",
 ]
-
+CORS_ALLOW_CREDENTIALS = True
 # En production, vous pouvez autoriser toutes les origines temporairement
 # Attention : pas recommandé en production finale !
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
