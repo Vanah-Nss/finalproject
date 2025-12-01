@@ -43,7 +43,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://finalproject-bu3e.onrender.com',
+]
 # Temporairement pour déboguer - À désactiver en production !
 CORS_ALLOW_ALL_ORIGINS = True
 
