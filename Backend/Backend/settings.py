@@ -61,10 +61,13 @@ CORS_ALLOWED_ORIGINS = [
     "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",  # Ajoutez cette ligne
 ]
 CORS_ALLOW_CREDENTIALS = True
-
-# Pour le développement, vous pouvez temporairement autoriser tout
-# ATTENTION: À désactiver en production finale !
-CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://finalproject-frontend-three.vercel.app",
+    "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",
+]
+CORS_ALLOW_CREDENTIALS = True
 
 ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
 # ============================
