@@ -5,19 +5,11 @@ from dotenv import load_dotenv
 from decouple import config
 import dj_database_url
 
-# ============================
-# Base Directory
-# ============================
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ============================
-# Charger le fichier .env
-# ============================
+
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# ============================
-# Variables d'environnement
-# ============================
 def get_env_variable(var_name):
     value = config(var_name, default=None)
     if not value:
@@ -27,40 +19,23 @@ def get_env_variable(var_name):
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-# Variables optionnelles avec valeurs par défaut
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 GOOGLE_GENAI_API_KEY = config("GOOGLE_GENAI_API_KEY", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 CLERK_SECRET_KEY = config("CLERK_SECRET_KEY", default="")
 GOOGLE_APPLICATION_CREDENTIALS = config("GOOGLE_APPLICATION_CREDENTIALS", default="")
 
-# Définir les variables d'environnement seulement si elles existent
+
 if GOOGLE_GENAI_API_KEY:
     os.environ["GENAI_API_KEY"] = GOOGLE_GENAI_API_KEY
 if GOOGLE_APPLICATION_CREDENTIALS:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
 
-# ============================
-# Debug & Hosts
-# ============================
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,.onrender.com").split(",")
+
 
 # ============================
 # CORS Configuration
 # ============================
-# Pour le développement et la production
-# ============================
-# CORS Configuration
-# ============================
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://localhost:3000",
-    "https://localhost:5173",
-    "https://finalproject-frontend-three.vercel.app",
-    "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",  # Ajoutez cette ligne
-]
-CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -69,10 +44,10 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+# Temporairement pour déboguer - À désactiver en production !
+CORS_ALLOW_ALL_ORIGINS = True
+
 ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
-# ============================
-# Application definition
-# ============================
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -81,7 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Apps tierces
+
     "corsheaders",
     "graphene_django",
     "graphql_jwt.refresh_token",
@@ -106,9 +81,6 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "Backend.urls"
 
-# ============================
-# Templates
-# ============================
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -127,16 +99,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "Backend.wsgi.application"
 
-# ============================
-# Database
-# ============================
+
 DATABASES = {
    "default": dj_database_url.parse(config("DATABASE_URL"))
 }
 
-# ============================
-# Auth
-# ============================
 AUTH_USER_MODEL = "users.CustomUser"
 
 AUTHENTICATION_BACKENDS = [
@@ -145,9 +112,6 @@ AUTHENTICATION_BACKENDS = [
     "social_core.backends.linkedin.LinkedinOAuth2",
 ]
 
-# ============================
-# Password validation
-# ============================
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -163,9 +127,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# ============================
-# GraphQL / JWT
-# ============================
+
 GRAPHENE = {
     "SCHEMA": "Backend.schema.schema",
     "MIDDLEWARE": [
@@ -183,42 +145,25 @@ GRAPHQL_JWT = {
     "JWT_REFRESH_EXPIRATION_DELTA": timedelta(days=30),
 }
 
-# ============================
-# Social Auth (LinkedIn)
-# ============================
 SOCIAL_AUTH_LINKEDIN_OAUTH2_KEY = config("SOCIAL_AUTH_LINKEDIN_OAUTH2_KEY", default="")
 SOCIAL_AUTH_LINKEDIN_OAUTH2_SECRET = config("SOCIAL_AUTH_LINKEDIN_OAUTH2_SECRET", default="")
 SOCIAL_AUTH_LINKEDIN_OAUTH2_SCOPE = ["r_liteprofile", "r_emailaddress"]
 SOCIAL_AUTH_LINKEDIN_OAUTH2_FIELD_SELECTORS = ["emailAddress"]
 SOCIAL_AUTH_LINKEDIN_OAUTH2_EXTRA_DATA = [("emailAddress", "email_address")]
 
-# ============================
-# Internationalization
-# ============================
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "Indian/Antananarivo"
 USE_I18N = True
 USE_TZ = True
 
-# ============================
-# Static & Media
-# ============================
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
-# STATICFILES_DIRS commenté car le dossier n'existe pas
-# Créez le dossier Backend/static si vous voulez l'utiliser
-# STATICFILES_DIRS = [
-#     os.path.join(BASE_DIR, "static"),
-# ]
 
-# Configuration pour WhiteNoise (servir les fichiers statiques en production)
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# ============================
-# Default primary key field type
-# ============================
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
