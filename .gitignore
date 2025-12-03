@@ -38,3 +38,7 @@ Thumbs.db
 # Build files
 Frontend/dist/
 Frontend/build/
+=4.2
+db.sqlite3
+Backend/db.sqlite3
+venv/
