@@ -24,6 +24,7 @@ GOOGLE_GENAI_API_KEY = config("GOOGLE_GENAI_API_KEY", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 CLERK_SECRET_KEY = config("CLERK_SECRET_KEY", default="")
 GOOGLE_APPLICATION_CREDENTIALS = config("GOOGLE_APPLICATION_CREDENTIALS", default="")
+RECAPTCHA_SECRET_KEY = config("RECAPTCHA_SECRET_KEY", default="")
 
 
 if GOOGLE_GENAI_API_KEY:
@@ -44,10 +45,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
-    'https://finalproject-bu3e.onrender.com',
+    "https://finalproject-bu3e.onrender.com",
+    "https://finalproject-frontend-three.vercel.app",
+    "https://finalproject-fro-git-4e9069-safidysylvana333-gmailcoms-projects.vercel.app",
 ]
-# Temporairement pour déboguer - À désactiver en production !
-CORS_ALLOW_ALL_ORIGINS = True
+
 
 ALLOWED_HOSTS = ["finalproject-bu3e.onrender.com", "localhost", "127.0.0.1"]
 INSTALLED_APPS = [
@@ -70,8 +72,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Ajouté pour servir les fichiers statiques
     "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Ajouté pour servir les fichiers statiques
+
     "django.middleware.common.CommonMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
