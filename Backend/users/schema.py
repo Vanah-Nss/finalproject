@@ -18,6 +18,31 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 # ============================================
+# TYPES GRAPHQL - À DÉFINIR EN PREMIER
+# ============================================
+
+class UserType(DjangoObjectType):
+    class Meta:
+        model = User
+        fields = ("id", "username", "email", "is_admin", "date_joined", "is_active", "clerk_id")
+
+class PostType(DjangoObjectType):
+    imageUrl = graphene.String()
+    scheduledAt = graphene.String()
+
+    class Meta:
+        model = Post
+        fields = ("id", "content", "status", "created_at", "updated_at", "scheduled_at", "image_url", "user")
+
+    def resolve_imageUrl(self, info):
+        return self.image_url
+
+    def resolve_scheduledAt(self, info):
+        if self.scheduled_at:
+            return self.scheduled_at.isoformat()
+        return None
+
+# ============================================
 # FONCTIONS UTILITAIRES
 # ============================================
 
@@ -25,13 +50,13 @@ def verify_recaptcha(token):
     """Vérifie le token reCAPTCHA avec l'API Google"""
     if not token:
         logger.warning("Pas de token reCAPTCHA fourni")
-        return True  # En développement, on autorise sans token
+        return True
         
     secret_key = config('RECAPTCHA_SECRET_KEY', default='')
     
     if not secret_key:
         logger.warning("RECAPTCHA_SECRET_KEY non configurée")
-        return True  # En développement
+        return True
     
     try:
         response = requests.post(
@@ -60,31 +85,6 @@ def get_linkedin_user(info):
     
     logger.info(f"Utilisateur authentifié: {user.username} (ID: {user.id})")
     return user
-
-# ============================================
-# TYPES GRAPHQL
-# ============================================
-
-class UserType(DjangoObjectType):
-    class Meta:
-        model = User
-        fields = ("id", "username", "email", "is_admin", "date_joined", "is_active", "clerk_id")
-
-class PostType(DjangoObjectType):
-    imageUrl = graphene.String()
-    scheduledAt = graphene.String()
-
-    class Meta:
-        model = Post
-        fields = ("id", "content", "status", "created_at", "updated_at", "scheduled_at", "image_url", "user")
-
-    def resolve_imageUrl(self, info):
-        return self.image_url
-
-    def resolve_scheduledAt(self, info):
-        if self.scheduled_at:
-            return self.scheduled_at.isoformat()
-        return None
 
 # ============================================
 # QUERIES
@@ -143,7 +143,7 @@ class Query(graphene.ObjectType):
 # ============================================
 
 class CreatePost(graphene.Mutation):
-    post = graphene.Field(PostType)
+    post = graphene.Field(PostType)  # ✅ PostType est maintenant défini ci-dessus
     success = graphene.Boolean()
     message = graphene.String()
 
@@ -158,7 +158,6 @@ class CreatePost(graphene.Mutation):
             logger.info("=== CreatePost mutation appelée ===")
             logger.info(f"Content length: {len(content) if content else 0}")
             
-            # Vérification reCAPTCHA (optionnel)
             if recaptchaToken and not verify_recaptcha(recaptchaToken):
                 return CreatePost(
                     post=None,
@@ -166,11 +165,9 @@ class CreatePost(graphene.Mutation):
                     message="❌ Échec de la vérification reCAPTCHA"
                 )
             
-            # Récupération de l'utilisateur
             user = get_linkedin_user(info)
             logger.info(f"✅ Utilisateur: {user.username} (ID: {user.id})")
             
-            # Validation du contenu
             if not content or len(content.strip()) == 0:
                 return CreatePost(
                     post=None,
@@ -178,7 +175,6 @@ class CreatePost(graphene.Mutation):
                     message="❌ Le contenu ne peut pas être vide"
                 )
 
-            # Parsing de la date programmée
             scheduled_dt = None
             if scheduledAt:
                 try:
@@ -187,7 +183,6 @@ class CreatePost(graphene.Mutation):
                 except (ValueError, AttributeError) as e:
                     logger.warning(f"Format de date invalide: {scheduledAt}")
 
-            # Création du post
             logger.info("Création du post dans la base...")
             post = Post.objects.create(
                 user=user,
@@ -212,6 +207,7 @@ class CreatePost(graphene.Mutation):
                 success=False,
                 message=f"❌ Erreur: {str(e)}"
             )
+
 
 class UpdatePost(graphene.Mutation):
     post = graphene.Field(PostType)
