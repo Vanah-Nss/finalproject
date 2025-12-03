@@ -1,6 +1,14 @@
 # Ajoutez ceci en haut du fichier
 import requests as req
-
+import graphene
+import urllib.parse
+import os
+from datetime import datetime
+from PIL import Image
+from io import BytesIO
+from graphql import GraphQLError  # ✅ AJOUT
+from decouple import config  # ✅ AJOUT
+import google.generativeai as genai
 # Fonction de validation reCAPTCHA
 def verify_recaptcha(token):
     """Vérifie le token reCAPTCHA avec l'API Google"""

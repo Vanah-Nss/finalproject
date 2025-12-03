@@ -10,6 +10,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import RedirectAfterSignIn from "./components/RedirectAfterSignIn";
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import AdminRoute from "./components/AdminRoute";
+console.log("API =", import.meta.env.VITE_API_URL);
 
 export default function App() {
   return (

@@ -23,13 +23,12 @@ const ALL_POSTS = gql`
 `;
 
 export default function Dashboard() {
-  const { user, isLoaded, isSignedIn, signOut } = useUser();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeMenu, setActiveMenu] = useState("Tableau de Bord");
-  const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
-  const [showMessage, setShowMessage] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [toast, setToast] = useState(null);
+   const { user, isLoaded, isSignedIn, signOut } = useUser();
+   const [sidebarOpen, setSidebarOpen] = useState(false);
+   const [activeMenu, setActiveMenu] = useState("Tableau de Bord");
+   const [showMessage, setShowMessage] = useState(false);
+   const [showLogoutModal, setShowLogoutModal] = useState(false);
+   const [toast, setToast] = useState(null);
 
   const GET_USER_ADMIN_STATUS = gql`
     query GetUserAdminStatus {
@@ -42,15 +41,6 @@ export default function Dashboard() {
 
   useQuery(GET_USER_ADMIN_STATUS);
   useQuery(ALL_POSTS, { pollInterval: 30000 });
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") root.classList.add("dark");
-    else root.classList.remove("dark");
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   useEffect(() => {
     if (isSignedIn) {
@@ -96,7 +86,7 @@ export default function Dashboard() {
       case "Historique":
         return <Historique />;
       case "Paramètres":
-        return <Parametres profile={profile} theme={theme} toggleTheme={toggleTheme} />;
+        return <Parametres />;
       case "Mon Profil":
         return (
           <div className="max-w-4xl mx-auto">

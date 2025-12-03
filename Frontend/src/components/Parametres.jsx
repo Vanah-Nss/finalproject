@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/clerk-react";
 import { FiSun, FiMoon, FiLogOut, FiLinkedin } from "react-icons/fi";
+import { useTheme } from "../ThemeContext";
 
-export default function Parametres({ theme, toggleTheme }) {
+export default function Parametres() {
+  const { theme, toggleTheme } = useTheme();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk(); 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -35,9 +37,9 @@ export default function Parametres({ theme, toggleTheme }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  return ( 
-     <div className="space-y-6 p-4">
-      <div className="flex flex-col h-screen bg-blue-50 dark:bg-blue-50 overflow-hidden">
+  return (
+      <div className="space-y-6 p-4">
+       <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
  <div className="m-6 bg-blue-900 text-white p-6 rounded-2xl shadow-lg border border-blue-700 flex items-center justify-between">
   <h1 className="text-3xl font-extrabold">⚙️ Paramètres</h1>
 </div>
