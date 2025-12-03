@@ -143,7 +143,7 @@ class Query(graphene.ObjectType):
 # ============================================
 
 class CreatePost(graphene.Mutation):
-    post = graphene.Field(PostType)  # ✅ PostType est maintenant défini ci-dessus
+    post = graphene.Field(PostType)
     success = graphene.Boolean()
     message = graphene.String()
 
@@ -158,6 +158,7 @@ class CreatePost(graphene.Mutation):
             logger.info("=== CreatePost mutation appelée ===")
             logger.info(f"Content length: {len(content) if content else 0}")
             
+            # Vérification reCAPTCHA
             if recaptchaToken and not verify_recaptcha(recaptchaToken):
                 return CreatePost(
                     post=None,
@@ -168,11 +169,12 @@ class CreatePost(graphene.Mutation):
             user = get_linkedin_user(info)
             logger.info(f"✅ Utilisateur: {user.username} (ID: {user.id})")
             
-            if not content or len(content.strip()) == 0:
+            # ✅ Accepter contenu vide SI une image est fournie
+            if (not content or len(content.strip()) == 0) and not imageUrl:
                 return CreatePost(
                     post=None,
                     success=False,
-                    message="❌ Le contenu ne peut pas être vide"
+                    message="❌ Le contenu ou une image est obligatoire"
                 )
 
             scheduled_dt = None
@@ -186,7 +188,7 @@ class CreatePost(graphene.Mutation):
             logger.info("Création du post dans la base...")
             post = Post.objects.create(
                 user=user,
-                content=content.strip(),
+                content=content.strip() if content else "",  # ✅ Accepter contenu vide
                 image_url=imageUrl,
                 scheduled_at=scheduled_dt,
                 status="Brouillon"
@@ -207,7 +209,6 @@ class CreatePost(graphene.Mutation):
                 success=False,
                 message=f"❌ Erreur: {str(e)}"
             )
-
 
 class UpdatePost(graphene.Mutation):
     post = graphene.Field(PostType)
