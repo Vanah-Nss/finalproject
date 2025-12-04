@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 # ============================================
-# TYPES GRAPHQL - À DÉFINIR EN PREMIER
+# TYPES GRAPHQL
 # ============================================
 
 class UserType(DjangoObjectType):
@@ -48,15 +48,20 @@ class PostType(DjangoObjectType):
 
 def verify_recaptcha(token):
     """Vérifie le token reCAPTCHA avec l'API Google"""
-    if not token:
-        logger.warning("Pas de token reCAPTCHA fourni")
-        return True
+    logger.info(f"🔍 verify_recaptcha appelée - Token présent: {bool(token)}")
+    
+    if not token or token.strip() == "":
+        logger.warning("⚠️ Token reCAPTCHA vide ou manquant")
+        return False
         
     secret_key = config('RECAPTCHA_SECRET_KEY', default='')
     
     if not secret_key:
-        logger.warning("RECAPTCHA_SECRET_KEY non configurée")
-        return True
+        logger.error("❌ RECAPTCHA_SECRET_KEY non configurée dans .env")
+        return False
+    
+    logger.info(f"🔐 Token (20 premiers caractères): {token[:20]}...")
+    logger.info(f"🔑 Secret key configurée: {bool(secret_key)}")
     
     try:
         response = requests.post(
@@ -65,15 +70,30 @@ def verify_recaptcha(token):
                 'secret': secret_key,
                 'response': token
             },
-            timeout=5
+            timeout=10
         )
         result = response.json()
         success = result.get('success', False)
-        logger.info(f"Vérification reCAPTCHA: {success}")
+        
+        logger.info(f"📡 Réponse Google reCAPTCHA: {result}")
+        
+        if not success:
+            error_codes = result.get('error-codes', [])
+            logger.error(f"❌ reCAPTCHA ÉCHEC - Codes d'erreur: {error_codes}")
+        else:
+            logger.info("✅✅✅ reCAPTCHA VALIDÉ avec succès")
+        
         return success
+        
+    except requests.exceptions.Timeout:
+        logger.error("❌ TIMEOUT lors de la vérification reCAPTCHA (>10s)")
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Erreur réseau reCAPTCHA: {str(e)}")
+        return False
     except Exception as e:
-        logger.error(f"Erreur vérification reCAPTCHA: {str(e)}")
-        return True
+        logger.error(f"❌ Erreur inattendue reCAPTCHA: {str(e)}", exc_info=True)
+        return False
 
 def get_linkedin_user(info):
     """Récupère l'utilisateur authentifié ou le premier utilisateur si aucun"""
@@ -107,14 +127,12 @@ class Query(graphene.ObjectType):
         user = info.context.user
         if user.is_anonymous:
             return Post.objects.none()
-
         return Post.objects.filter(user=user).order_by("-created_at")
 
     def resolve_post(self, info, id):
         user = info.context.user
         if user.is_anonymous:
             raise GraphQLError("Authentification requise.")
-
         try:
             return Post.objects.get(id=id, user=user)
         except Post.DoesNotExist:
@@ -126,7 +144,6 @@ class Query(graphene.ObjectType):
             raise GraphQLError("Authentification requise.")
         if not user.is_admin:
             raise GraphQLError("❌ Accès refusé : Vous devez être administrateur.")
-
         return User.objects.all().order_by('-date_joined')
 
     def resolve_all_posts_admin(self, info):
@@ -135,7 +152,6 @@ class Query(graphene.ObjectType):
             raise GraphQLError("Authentification requise.")
         if not user.is_admin:
             raise GraphQLError("❌ Accès refusé : Vous devez être administrateur.")
-
         return Post.objects.all().order_by('-created_at')
 
 # ============================================
@@ -151,21 +167,32 @@ class CreatePost(graphene.Mutation):
         content = graphene.String(required=True)
         imageUrl = graphene.String()
         scheduledAt = graphene.String(required=False)
-        recaptchaToken = graphene.String(required=False)
+        recaptchaToken = graphene.String(required=True)
 
-    def mutate(self, info, content, recaptchaToken=None, imageUrl=None, scheduledAt=None):
+    def mutate(self, info, content, recaptchaToken, imageUrl=None, scheduledAt=None):
         try:
             logger.info("=== CreatePost mutation appelée ===")
             logger.info(f"Content length: {len(content) if content else 0}")
+            logger.info(f"Token reCAPTCHA reçu: {bool(recaptchaToken)}")
             
-            # Vérification reCAPTCHA
-            if recaptchaToken and not verify_recaptcha(recaptchaToken):
+            # ✅ Vérification STRICTE du reCAPTCHA
+            if not recaptchaToken:
+                logger.error("❌ Token reCAPTCHA manquant")
                 return CreatePost(
                     post=None,
                     success=False,
-                    message="❌ Échec de la vérification reCAPTCHA"
+                    message="❌ Token reCAPTCHA manquant. Veuillez valider le reCAPTCHA."
                 )
             
+            if not verify_recaptcha(recaptchaToken):
+                logger.error("❌ Vérification reCAPTCHA échouée")
+                return CreatePost(
+                    post=None,
+                    success=False,
+                    message="❌ Échec de la vérification reCAPTCHA. Le token est peut-être expiré (2min max). Veuillez revalider."
+                )
+            
+            logger.info("✅ reCAPTCHA validé avec succès")
             user = get_linkedin_user(info)
             logger.info(f"✅ Utilisateur: {user.username} (ID: {user.id})")
             
@@ -188,7 +215,7 @@ class CreatePost(graphene.Mutation):
             logger.info("Création du post dans la base...")
             post = Post.objects.create(
                 user=user,
-                content=content.strip() if content else "",  # ✅ Accepter contenu vide
+                content=content.strip() if content else "",
                 image_url=imageUrl,
                 scheduled_at=scheduled_dt,
                 status="Brouillon"
@@ -206,6 +233,194 @@ class CreatePost(graphene.Mutation):
             logger.error(f"❌❌❌ Erreur CreatePost: {str(e)}", exc_info=True)
             return CreatePost(
                 post=None,
+                success=False,
+                message=f"❌ Erreur: {str(e)}"
+            )
+
+class GeneratePost(graphene.Mutation):
+    post = graphene.Field(PostType)
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        theme = graphene.String(required=True)
+        tone = graphene.String(required=False)
+        length = graphene.String(required=False)
+        imageUrl = graphene.String(required=False)
+        scheduledAt = graphene.String(required=False)
+        recaptchaToken = graphene.String(required=True)
+
+    def mutate(self, info, theme, recaptchaToken, tone=None, length=None, imageUrl=None, scheduledAt=None):
+        try:
+            logger.info("=== GeneratePost mutation appelée ===")
+            logger.info(f"Theme: {theme}")
+            logger.info(f"Token reCAPTCHA reçu: {bool(recaptchaToken)}")
+            
+            # ✅ Vérification STRICTE du reCAPTCHA
+            if not recaptchaToken:
+                logger.error("❌ Token reCAPTCHA manquant")
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message="❌ Token reCAPTCHA manquant. Veuillez valider le reCAPTCHA."
+                )
+            
+            if not verify_recaptcha(recaptchaToken):
+                logger.error("❌ Vérification reCAPTCHA échouée")
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message="❌ Échec de la vérification reCAPTCHA. Le token est peut-être expiré (2min max). Veuillez revalider."
+                )
+            
+            logger.info("✅ reCAPTCHA validé avec succès")
+            user = get_linkedin_user(info)
+
+            scheduled_dt = None
+            if scheduledAt:
+                try:
+                    scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
+                except ValueError:
+                    pass
+
+            # Génération du contenu avec Gemini
+            prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
+            if tone:
+                prompt += f" avec un ton {tone}"
+            if length:
+                prompt += f" et une longueur {length}"
+            prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
+
+            api_key = config('GOOGLE_GENAI_API_KEY', default='')
+            if not api_key:
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message="❌ Clé API Gemini non configurée"
+                )
+
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            
+            try:
+                response = model.generate_content(prompt)
+                text = response.text.strip()
+                logger.info(f"✅ Contenu généré: {len(text)} caractères")
+            except Exception as e:
+                logger.error(f"Erreur Gemini: {str(e)}")
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message=f"❌ Erreur lors de la génération: {str(e)}"
+                )
+
+            post = Post.objects.create(
+                user=user,
+                content=text,
+                image_url=imageUrl,
+                scheduled_at=scheduled_dt,
+                status="Brouillon"
+            )
+
+            logger.info(f"✅✅✅ Post IA créé avec succès: ID={post.id}")
+
+            return GeneratePost(
+                post=post,
+                success=True,
+                message="✅ Post généré avec succès"
+            )
+            
+        except Exception as e:
+            logger.error(f"❌❌❌ Erreur GeneratePost: {str(e)}", exc_info=True)
+            return GeneratePost(
+                post=None,
+                success=False,
+                message=f"❌ Erreur: {str(e)}"
+            )
+
+class GenerateImage(graphene.Mutation):
+    class Arguments:
+        prompt = graphene.String(required=True)
+        recaptchaToken = graphene.String(required=True)
+    
+    image_url = graphene.String()
+    success = graphene.Boolean()
+    message = graphene.String()
+    
+    def mutate(self, info, prompt, recaptchaToken):
+        try:
+            logger.info("=== GenerateImage mutation appelée ===")
+            logger.info(f"Prompt: {prompt[:50]}...")
+            logger.info(f"Token reCAPTCHA reçu: {bool(recaptchaToken)}")
+            
+            # ✅ Vérification STRICTE du reCAPTCHA
+            if not recaptchaToken:
+                logger.error("❌ Token reCAPTCHA manquant")
+                return GenerateImage(
+                    image_url=None,
+                    success=False,
+                    message="❌ Token reCAPTCHA manquant. Veuillez valider le reCAPTCHA."
+                )
+            
+            if not verify_recaptcha(recaptchaToken):
+                logger.error("❌ Vérification reCAPTCHA échouée")
+                return GenerateImage(
+                    image_url=None,
+                    success=False,
+                    message="❌ Échec de la vérification reCAPTCHA. Le token est peut-être expiré (2min max). Veuillez revalider."
+                )
+            
+            logger.info("✅ reCAPTCHA validé avec succès")
+            
+            encoded_prompt = urllib.parse.quote(prompt)
+            image_api_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+            
+            params = {
+                "width": 1024,
+                "height": 1024,
+                "seed": int(datetime.now().timestamp()),
+                "model": "flux",
+                "nologo": "true"
+            }
+            
+            full_url = f"{image_api_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+            response = requests.get(full_url, timeout=60)
+            
+            if response.status_code == 200:
+                os.makedirs("media/images", exist_ok=True)
+                filename = f"generated_{int(datetime.now().timestamp())}.png"
+                output_path = f"media/images/{filename}"
+                
+                image = Image.open(BytesIO(response.content))
+                image.save(output_path)
+                
+                base_url = config('BASE_URL', default='https://finalproject-bu3e.onrender.com')
+                image_url = f"{base_url}/media/images/{filename}"
+                
+                logger.info(f"✅ Image générée: {image_url}")
+                
+                return GenerateImage(
+                    image_url=image_url,
+                    success=True,
+                    message="✅ Image générée avec succès"
+                )
+            else:
+                return GenerateImage(
+                    image_url=None,
+                    success=False,
+                    message=f"❌ Erreur API: {response.status_code}"
+                )
+                
+        except requests.exceptions.Timeout:
+            return GenerateImage(
+                image_url=None,
+                success=False,
+                message="❌ Timeout lors de la génération"
+            )
+        except Exception as e:
+            logger.error(f"❌ Erreur GenerateImage: {str(e)}", exc_info=True)
+            return GenerateImage(
+                image_url=None,
                 success=False,
                 message=f"❌ Erreur: {str(e)}"
             )
@@ -251,168 +466,9 @@ class DeletePost(graphene.Mutation):
         except ObjectDoesNotExist:
             return DeletePost(ok=False)
 
-class GeneratePost(graphene.Mutation):
-    post = graphene.Field(PostType)
-    success = graphene.Boolean()
-    message = graphene.String()
-
-    class Arguments:
-        theme = graphene.String(required=True)
-        tone = graphene.String(required=False)
-        length = graphene.String(required=False)
-        imageUrl = graphene.String(required=False) 
-        scheduledAt = graphene.String(required=False)
-        recaptchaToken = graphene.String(required=False)
-
-    def mutate(self, info, theme, recaptchaToken=None, tone=None, length=None, imageUrl=None, scheduledAt=None):
-        try:
-            logger.info("=== GeneratePost mutation appelée ===")
-            
-            # Vérification reCAPTCHA
-            if recaptchaToken and not verify_recaptcha(recaptchaToken):
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message="❌ Échec de la vérification reCAPTCHA"
-                )
-            
-            user = get_linkedin_user(info)
-
-            scheduled_dt = None
-            if scheduledAt:
-                try:
-                    scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
-                except ValueError:
-                    pass
-
-            # Génération du contenu
-            prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
-            if tone:
-                prompt += f" avec un ton {tone}"
-            if length:
-                prompt += f" et une longueur {length}"
-            prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
-
-            # Utiliser la clé API depuis les variables d'environnement
-            api_key = config('GOOGLE_GENAI_API_KEY', default='')
-            if not api_key:
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message="❌ Clé API Gemini non configurée"
-                )
-
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash-exp")
-            
-            try:
-                response = model.generate_content(prompt)
-                text = response.text.strip()
-                logger.info(f"✅ Contenu généré: {len(text)} caractères")
-            except Exception as e:
-                logger.error(f"Erreur Gemini: {str(e)}")
-                text = f"Erreur lors de la génération du post : {str(e)}"
-
-            post = Post.objects.create(
-                user=user,
-                content=text,
-                image_url=imageUrl,  
-                scheduled_at=scheduled_dt,
-                status="Brouillon"
-            )
-
-            return GeneratePost(
-                post=post,
-                success=True,
-                message="✅ Post généré avec succès"
-            )
-            
-        except Exception as e:
-            logger.error(f"❌ Erreur GeneratePost: {str(e)}", exc_info=True)
-            return GeneratePost(
-                post=None,
-                success=False,
-                message=f"❌ Erreur: {str(e)}"
-            )
-
-class GenerateImage(graphene.Mutation):
-    class Arguments:
-        prompt = graphene.String(required=True)
-        recaptchaToken = graphene.String(required=False)
-    
-    image_url = graphene.String()
-    success = graphene.Boolean()
-    message = graphene.String()
-    
-    def mutate(self, info, prompt, recaptchaToken=None):
-        try:
-            logger.info("=== GenerateImage mutation appelée ===")
-            
-            # Vérification reCAPTCHA
-            if recaptchaToken and not verify_recaptcha(recaptchaToken):
-                return GenerateImage(
-                    image_url=None,
-                    success=False,
-                    message="❌ Échec de la vérification reCAPTCHA"
-                )
-            
-            encoded_prompt = urllib.parse.quote(prompt)
-            image_api_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-            
-            params = {
-                "width": 1024,
-                "height": 1024,
-                "seed": int(datetime.now().timestamp()),
-                "model": "flux",
-                "nologo": "true"
-            }
-            
-            full_url = f"{image_api_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
-            response = requests.get(full_url, timeout=60)
-            
-            if response.status_code == 200:
-                os.makedirs("media/images", exist_ok=True)
-                filename = f"generated_{int(datetime.now().timestamp())}.png"
-                output_path = f"media/images/{filename}"
-                
-                image = Image.open(BytesIO(response.content))
-                image.save(output_path)
-                
-                # URL de production
-                base_url = config('BASE_URL', default='https://finalproject-bu3e.onrender.com')
-                image_url = f"{base_url}/media/images/{filename}"
-                
-                logger.info(f"✅ Image générée: {image_url}")
-                
-                return GenerateImage(
-                    image_url=image_url,
-                    success=True,
-                    message="✅ Image générée avec succès"
-                )
-            else:
-                return GenerateImage(
-                    image_url=None,
-                    success=False,
-                    message=f"❌ Erreur API: {response.status_code}"
-                )
-                
-        except requests.exceptions.Timeout:
-            return GenerateImage(
-                image_url=None,
-                success=False,
-                message="❌ Timeout lors de la génération"
-            )
-        except Exception as e:
-            logger.error(f"❌ Erreur GenerateImage: {str(e)}", exc_info=True)
-            return GenerateImage(
-                image_url=None,
-                success=False,
-                message=f"❌ Erreur: {str(e)}"
-            )
-
 class PublishPost(graphene.Mutation):
     class Arguments:
-        id = graphene.Int(required=True) 
+        id = graphene.Int(required=True)
 
     post = graphene.Field(PostType)
 
