@@ -258,7 +258,7 @@ class GeneratePost(graphene.Mutation):
                 )
 
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            model = genai.GenerativeModel("gemini-2.0-flash") 
             
             try:
                 response = model.generate_content(prompt)
