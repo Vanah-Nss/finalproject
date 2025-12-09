@@ -13,9 +13,7 @@ import google.generativeai as genai
 from graphql import GraphQLError
 import logging
 import os
-import time
-from collections import defaultdict
-from threading import Lock
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -66,7 +64,9 @@ def get_linkedin_user(info):
     logger.info(f"Utilisateur authentifié: {user.username} (ID: {user.id})")
     return user
 
-
+# ============================================
+# QUERIES
+# ============================================
 
 class Query(graphene.ObjectType):
     me = graphene.Field(UserType)
@@ -195,110 +195,6 @@ class CreatePost(graphene.Mutation):
                 message=f"❌ Erreur: {str(e)}"
             )
 
-# Ajoutez ceci au début de votre schema.py
-import time
-from collections import defaultdict
-from threading import Lock
-
-# ============================================
-# RATE LIMITER POUR GEMINI
-# ============================================
-
-class RateLimiter:
-    """
-    Rate limiter pour éviter de dépasser le quota Gemini
-    Limite: 10 requêtes par minute par utilisateur
-    """
-    def __init__(self, max_requests=10, time_window=60):
-        self.max_requests = max_requests
-        self.time_window = time_window
-        self.requests = defaultdict(list)
-        self.lock = Lock()
-    
-    def can_make_request(self, user_id):
-        """Vérifie si l'utilisateur peut faire une requête"""
-        with self.lock:
-            now = time.time()
-            user_key = str(user_id)
-            
-            # Supprimer les anciennes requêtes
-            self.requests[user_key] = [
-                req_time for req_time in self.requests[user_key]
-                if now - req_time < self.time_window
-            ]
-            
-            # Vérifier la limite
-            if len(self.requests[user_key]) >= self.max_requests:
-                oldest_request = min(self.requests[user_key])
-                wait_time = self.time_window - (now - oldest_request)
-                return False, int(wait_time)
-            
-            # Ajouter la requête
-            self.requests[user_key].append(now)
-            return True, 0
-    
-    def get_remaining_requests(self, user_id):
-        """Retourne le nombre de requêtes restantes"""
-        with self.lock:
-            now = time.time()
-            user_key = str(user_id)
-            
-            self.requests[user_key] = [
-                req_time for req_time in self.requests[user_key]
-                if now - req_time < self.time_window
-            ]
-            
-            return self.max_requests - len(self.requests[user_key])
-
-# Instance globale du rate limiter
-gemini_rate_limiter = RateLimiter(max_requests=10, time_window=60)
-
-# ============================================
-# FONCTION HELPER POUR GEMINI
-# ============================================
-
-def call_gemini_with_retry(prompt, max_retries=3):
-    """
-    Appelle Gemini avec retry automatique en cas d'erreur 429
-    """
-    api_key = config('GOOGLE_GENAI_API_KEY', default='')
-    if not api_key:
-        raise Exception("Clé API Gemini non configurée")
-    
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    
-    for attempt in range(max_retries):
-        try:
-            response = model.generate_content(prompt)
-            return response.text.strip()
-        
-        except Exception as e:
-            error_msg = str(e)
-            
-            # Si erreur 429 (quota dépassé)
-            if "429" in error_msg or "quota" in error_msg.lower():
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 5  # 5, 10, 15 secondes
-                    logger.warning(f"⚠️ Quota Gemini atteint. Attente de {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    raise Exception(
-                        "❌ Quota Gemini dépassé. Solutions:\n"
-                        "1. Créez une nouvelle clé API sur https://aistudio.google.com/\n"
-                        "2. Attendez la réinitialisation du quota (24h)\n"
-                        "3. Passez au plan payant pour plus de requêtes"
-                    )
-            else:
-                raise e
-    
-    raise Exception("Échec après plusieurs tentatives")
-
-# ============================================
-# MUTATION GÉNÉRER POST (MODIFIÉE)
-# ============================================
-
 class GeneratePost(graphene.Mutation):
     post = graphene.Field(PostType)
     success = graphene.Boolean()
@@ -315,31 +211,37 @@ class GeneratePost(graphene.Mutation):
     def mutate(self, info, theme, recaptchaToken, tone=None, length=None, imageUrl=None, scheduledAt=None):
         try:
             logger.info("=== GeneratePost mutation appelée ===")
+            logger.info(f"Theme: {theme}")
+            logger.info(f"Token reCAPTCHA reçu: {bool(recaptchaToken)}")
             
-            # ✅ Vérification reCAPTCHA
-            if not recaptchaToken or not verify_recaptcha(recaptchaToken):
+            # ✅ Vérification STRICTE du reCAPTCHA
+            if not recaptchaToken:
+                logger.error("❌ Token reCAPTCHA manquant")
                 return GeneratePost(
                     post=None,
                     success=False,
-                    message="❌ Vérification reCAPTCHA échouée"
+                    message="❌ Token reCAPTCHA manquant. Veuillez valider le reCAPTCHA."
                 )
             
+            if not verify_recaptcha(recaptchaToken):
+                logger.error("❌ Vérification reCAPTCHA échouée")
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message="❌ Échec de la vérification reCAPTCHA. Le token est peut-être expiré (2min max). Veuillez revalider."
+                )
+            
+            logger.info("✅ reCAPTCHA validé avec succès")
             user = get_linkedin_user(info)
-            
-            # ✅ NOUVEAU: Vérifier le rate limit
-            can_request, wait_time = gemini_rate_limiter.can_make_request(user.id)
-            
-            if not can_request:
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message=f"⏳ Limite atteinte. Attendez {wait_time} secondes avant de réessayer."
-                )
-            
-            remaining = gemini_rate_limiter.get_remaining_requests(user.id)
-            logger.info(f"✅ Rate limit OK - Requêtes restantes: {remaining}/10")
 
-            # Génération du prompt
+            scheduled_dt = None
+            if scheduledAt:
+                try:
+                    scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
+                except ValueError:
+                    pass
+
+            # Génération du contenu avec Gemini
             prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
             if tone:
                 prompt += f" avec un ton {tone}"
@@ -347,25 +249,27 @@ class GeneratePost(graphene.Mutation):
                 prompt += f" et une longueur {length}"
             prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
 
-            # ✅ NOUVEAU: Appel avec retry automatique
-            try:
-                text = call_gemini_with_retry(prompt)
-                logger.info(f"✅ Contenu généré: {len(text)} caractères")
-            except Exception as e:
-                logger.error(f"❌ Erreur Gemini: {str(e)}")
+            api_key = config('GOOGLE_GENAI_API_KEY', default='')
+            if not api_key:
                 return GeneratePost(
                     post=None,
                     success=False,
-                    message=str(e)
+                    message="❌ Clé API Gemini non configurée"
                 )
 
-            # Créer le post
-            scheduled_dt = None
-            if scheduledAt:
-                try:
-                    scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
-                except ValueError:
-                    pass
+            genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")  # Même clé que test_gemini.py
+            model = genai.GenerativeModel("gemini-2.5-flash") 
+            try:
+                response = model.generate_content(prompt)
+                text = response.text.strip()
+                logger.info(f"✅ Contenu généré: {len(text)} caractères")
+            except Exception as e:
+                logger.error(f"Erreur Gemini: {str(e)}")
+                return GeneratePost(
+                    post=None,
+                    success=False,
+                    message=f"❌ Erreur lors de la génération: {str(e)}"
+                )
 
             post = Post.objects.create(
                 user=user,
@@ -375,52 +279,22 @@ class GeneratePost(graphene.Mutation):
                 status="Brouillon"
             )
 
-            logger.info(f"✅✅✅ Post IA créé: ID={post.id}")
-            
+            logger.info(f"✅✅✅ Post IA créé avec succès: ID={post.id}")
+
             return GeneratePost(
                 post=post,
                 success=True,
-                message=f"✅ Post généré avec succès ({remaining-1} requêtes restantes)"
+                message="✅ Post généré avec succès"
             )
             
         except Exception as e:
-            logger.error(f"❌ Erreur GeneratePost: {str(e)}", exc_info=True)
+            logger.error(f"❌❌❌ Erreur GeneratePost: {str(e)}", exc_info=True)
             return GeneratePost(
                 post=None,
                 success=False,
                 message=f"❌ Erreur: {str(e)}"
             )
 
-
-# ============================================
-# QUERY POUR VÉRIFIER LE QUOTA (OPTIONNEL)
-# ============================================
-
-class QuotaStatus(graphene.ObjectType):
-    remaining_requests = graphene.Int()
-    max_requests = graphene.Int()
-    time_window = graphene.Int()
-    can_make_request = graphene.Boolean()
-
-class Query(graphene.ObjectType):
-    # ... vos queries existantes ...
-    
-    gemini_quota_status = graphene.Field(QuotaStatus)
-    
-    def resolve_gemini_quota_status(self, info):
-        user = info.context.user
-        if user.is_anonymous:
-            raise GraphQLError("Authentification requise.")
-        
-        remaining = gemini_rate_limiter.get_remaining_requests(user.id)
-        can_request, _ = gemini_rate_limiter.can_make_request(user.id)
-        
-        return QuotaStatus(
-            remaining_requests=remaining,
-            max_requests=gemini_rate_limiter.max_requests,
-            time_window=gemini_rate_limiter.time_window,
-            can_make_request=can_request
-        )
 class GenerateImage(graphene.Mutation):
     class Arguments:
         prompt = graphene.String(required=True)
