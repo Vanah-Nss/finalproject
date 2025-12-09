@@ -64,9 +64,7 @@ def get_linkedin_user(info):
     logger.info(f"Utilisateur authentifié: {user.username} (ID: {user.id})")
     return user
 
-# ============================================
-# QUERIES
-# ============================================
+
 
 class Query(graphene.ObjectType):
     me = graphene.Field(UserType)
