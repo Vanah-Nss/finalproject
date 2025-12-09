@@ -196,23 +196,46 @@ class CreatePost(graphene.Mutation):
             )
 
 class GeneratePost(graphene.Mutation):
-    post = graphene.Field(PostType)
-
     class Arguments:
         theme = graphene.String(required=True)
         tone = graphene.String(required=False)
         length = graphene.String(required=False)
         imageUrl = graphene.String(required=False) 
         scheduledAt = graphene.String(required=False)
+        recaptchaToken = graphene.String(required=True)  # ⬅️ AJOUTEZ CE CHAMP
+    
+    # ⬇️ AJOUTEZ CES CHAMPS DE RETOUR
+    post = graphene.Field(PostType)
+    success = graphene.Boolean()
+    message = graphene.String()
 
-    def mutate(self, info, theme, tone=None, length=None, imageUrl=None, scheduledAt=None):
+    def mutate(self, info, theme, tone=None, length=None, imageUrl=None, scheduledAt=None, recaptchaToken=None):
+        # ✅ Vérifiez le recaptchaToken comme pour CreatePost
+        logger.info(f"GeneratePost - recaptchaToken: {recaptchaToken[:30] if recaptchaToken else 'None'}...")
+        
+        # Vérification basique du token
+        if not recaptchaToken:
+            return GeneratePost(
+                post=None,
+                success=False,
+                message="❌ Token reCAPTCHA manquant"
+            )
+        
+        # Mode debug simplifié
+        if not verify_recaptcha(recaptchaToken):
+            return GeneratePost(
+                post=None,
+                success=False,
+                message="❌ Échec de la vérification reCAPTCHA"
+            )
+        
         user = get_linkedin_user(info)
 
         scheduled_dt = None
         if scheduledAt:
             try:
-                scheduled_dt = datetime.fromisoformat(scheduledAt)
-            except ValueError:
+                scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
                 pass
 
         prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
@@ -222,8 +245,9 @@ class GeneratePost(graphene.Mutation):
             prompt += f" et une longueur {length}"
         prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
 
-        genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")  # Même clé que test_gemini.py
-        model = genai.GenerativeModel("gemini-2.5-flash")  # Modèle qui marche pour vous
+        genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        
         try:
             response = model.generate_content(prompt)
             text = response.text.strip()
@@ -238,8 +262,11 @@ class GeneratePost(graphene.Mutation):
             status="Brouillon"
         )
 
-        return GeneratePost(post=post)
-
+        return GeneratePost(
+            post=post,
+            success=True,
+            message="✅ Post généré avec succès"
+        )
 class GenerateImage(graphene.Mutation):
     class Arguments:
         prompt = graphene.String(required=True)
