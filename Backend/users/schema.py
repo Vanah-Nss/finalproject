@@ -197,103 +197,48 @@ class CreatePost(graphene.Mutation):
 
 class GeneratePost(graphene.Mutation):
     post = graphene.Field(PostType)
-    success = graphene.Boolean()
-    message = graphene.String()
 
     class Arguments:
         theme = graphene.String(required=True)
         tone = graphene.String(required=False)
         length = graphene.String(required=False)
-        imageUrl = graphene.String(required=False)
+        imageUrl = graphene.String(required=False) 
         scheduledAt = graphene.String(required=False)
-        recaptchaToken = graphene.String(required=True)
 
-    def mutate(self, info, theme, recaptchaToken, tone=None, length=None, imageUrl=None, scheduledAt=None):
-        try:
-            logger.info("=== GeneratePost mutation appelée ===")
-            logger.info(f"Theme: {theme}")
-            logger.info(f"Token reCAPTCHA reçu: {bool(recaptchaToken)}")
-            
-            # ✅ Vérification STRICTE du reCAPTCHA
-            if not recaptchaToken:
-                logger.error("❌ Token reCAPTCHA manquant")
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message="❌ Token reCAPTCHA manquant. Veuillez valider le reCAPTCHA."
-                )
-            
-            if not verify_recaptcha(recaptchaToken):
-                logger.error("❌ Vérification reCAPTCHA échouée")
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message="❌ Échec de la vérification reCAPTCHA. Le token est peut-être expiré (2min max). Veuillez revalider."
-                )
-            
-            logger.info("✅ reCAPTCHA validé avec succès")
-            user = get_linkedin_user(info)
+    def mutate(self, info, theme, tone=None, length=None, imageUrl=None, scheduledAt=None):
+        user = get_linkedin_user(info)
 
-            scheduled_dt = None
-            if scheduledAt:
-                try:
-                    scheduled_dt = datetime.fromisoformat(scheduledAt.replace('Z', '+00:00'))
-                except ValueError:
-                    pass
-
-            # Génération du contenu avec Gemini
-            prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
-            if tone:
-                prompt += f" avec un ton {tone}"
-            if length:
-                prompt += f" et une longueur {length}"
-            prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
-
-            api_key = config('GOOGLE_GENAI_API_KEY', default='')
-            if not api_key:
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message="❌ Clé API Gemini non configurée"
-                )
-
-            genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")  # Même clé que test_gemini.py
-            model = genai.GenerativeModel("gemini-2.5-flash") 
+        scheduled_dt = None
+        if scheduledAt:
             try:
-                response = model.generate_content(prompt)
-                text = response.text.strip()
-                logger.info(f"✅ Contenu généré: {len(text)} caractères")
-            except Exception as e:
-                logger.error(f"Erreur Gemini: {str(e)}")
-                return GeneratePost(
-                    post=None,
-                    success=False,
-                    message=f"❌ Erreur lors de la génération: {str(e)}"
-                )
+                scheduled_dt = datetime.fromisoformat(scheduledAt)
+            except ValueError:
+                pass
 
-            post = Post.objects.create(
-                user=user,
-                content=text,
-                image_url=imageUrl,
-                scheduled_at=scheduled_dt,
-                status="Brouillon"
-            )
+        prompt = f"Génère un post LinkedIn sur le thème '{theme}'"
+        if tone:
+            prompt += f" avec un ton {tone}"
+        if length:
+            prompt += f" et une longueur {length}"
+        prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
 
-            logger.info(f"✅✅✅ Post IA créé avec succès: ID={post.id}")
-
-            return GeneratePost(
-                post=post,
-                success=True,
-                message="✅ Post généré avec succès"
-            )
-            
+        genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")  # Même clé que test_gemini.py
+        model = genai.GenerativeModel("gemini-2.5-flash")  # Modèle qui marche pour vous
+        try:
+            response = model.generate_content(prompt)
+            text = response.text.strip()
         except Exception as e:
-            logger.error(f"❌❌❌ Erreur GeneratePost: {str(e)}", exc_info=True)
-            return GeneratePost(
-                post=None,
-                success=False,
-                message=f"❌ Erreur: {str(e)}"
-            )
+            text = f"Erreur lors de la génération du post : {str(e)}"
+
+        post = Post.objects.create(
+            user=user,
+            content=text,
+            image_url=imageUrl,  
+            scheduled_at=scheduled_dt,
+            status="Brouillon"
+        )
+
+        return GeneratePost(post=post)
 
 class GenerateImage(graphene.Mutation):
     class Arguments:
