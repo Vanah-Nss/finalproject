@@ -11,7 +11,8 @@ services:
         fromDatabase:
           name: myapp-db
           property: connectionString
-
+      - key: GOOGLE_GENAI_API_KEY
+        sync: false
 databases:
   - name: myapp-db
     databaseName: myapp

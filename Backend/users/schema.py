@@ -245,7 +245,7 @@ class GeneratePost(graphene.Mutation):
             prompt += f" et une longueur {length}"
         prompt += ". Fais un texte engageant, naturel et adapté au réseau LinkedIn."
 
-        genai.configure(api_key="AIzaSyA0jpijHepxS0K1V_BwmqZHP2lMag8Ak_U")
+        genai.configure(api_key=config('GOOGLE_GENAI_API_KEY'))
         model = genai.GenerativeModel("gemini-2.5-flash")
         
         try:
